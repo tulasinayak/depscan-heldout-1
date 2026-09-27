@@ -1,0 +1,84 @@
+# depscan evaluation data (held-out set). Written from the code and the advisory texts BEFORE depscan was run on
+# this repository; depscan's matching logic and prompts must not be changed after seeing its results here.
+advisories:
+  - id: CVE-2026-54283
+    package: starlette
+    expected: likely_affected
+    scenario: reachable_via_framework
+    reason: "POST /contact takes Form(...) fields, so FastAPI calls starlette's request.form(); an application/x-www-form-urlencoded body is parsed without the max_fields / max_part_size limits (FastAPI's defaults are ignored as well), so one request with ~1M fields blocks the event loop"
+    key_location: hub/routers/contact.py:10
+  - id: CVE-2026-54282
+    package: starlette
+    expected: likely_not_affected
+    scenario: feature_not_used
+    reason: "only code that reads request.url / .hostname / .netloc for a security decision is affected; the app never uses request.url"
+    key_location: hub/main.py:5
+  - id: CVE-2026-53540
+    package: python-multipart
+    expected: likely_not_affected
+    scenario: framework_dependency_unused_api
+    reason: "only direct callers of python_multipart.parse_form() with an attacker Content-Length are affected (advisory text); starlette drives MultipartParser itself and never calls parse_form, and the app never imports python-multipart"
+    key_location: requirements.txt:32
+  - id: CVE-2026-48524
+    package: pyjwt
+    expected: likely_affected
+    scenario: reachable_untrusted_input
+    reason: "every request's bearer token goes to PyJWKClient.get_signing_key_from_jwt(); a token with an unknown kid forces a fresh JWKS fetch each time, with no cooldown"
+    key_location: hub/auth.py:14
+  - id: CVE-2026-48523
+    package: pyjwt
+    expected: likely_not_affected
+    scenario: safe_arguments
+    reason: "the allow-list bypass needs jwt.decode() to receive a PyJWK object; the app passes signing_key.key (the raw public key), so the header alg is checked against algorithms=['RS256'] and used for verification"
+    key_location: hub/auth.py:15
+  - id: CVE-2026-48526
+    package: pyjwt
+    expected: likely_not_affected
+    scenario: safe_arguments
+    reason: "needs algorithms that mix HMAC and asymmetric families plus a raw JSON JWK as key; decode is called with algorithms=['RS256'] only and a public key object"
+    key_location: hub/auth.py:15
+  - id: CVE-2026-48522
+    package: pyjwt
+    expected: likely_not_affected
+    scenario: constant_input
+    reason: "the JWKS URI comes from operator configuration (HUB_JWKS_URL, default https URL), never from a token (jku) or a request, so no attacker-chosen scheme reaches PyJWKClient"
+    key_location: hub/auth.py:8
+  - id: CVE-2026-48525
+    package: pyjwt
+    expected: likely_not_affected
+    scenario: feature_not_used
+    reason: "only endpoints that verify detached b64=false JWS (detached_payload) are affected; the app verifies ordinary compact JWTs from the Authorization header"
+    key_location: hub/auth.py:15
+  - id: CVE-2026-41066
+    package: lxml
+    expected: likely_affected
+    scenario: reachable_untrusted_input
+    reason: "PUT /catalog passes the uploaded file to etree.iterparse() with the default resolve_entities=True (lxml 5.3), so an uploaded catalogue can pull in local files through external entities; the content-type check is client-controlled"
+    key_location: hub/catalog.py:6
+
+expected_sites:
+  - {package: pyjwt, location: "hub/auth.py:1", symbol: jwt}
+  - {package: pyjwt, location: "hub/auth.py:8", symbol: PyJWKClient}
+  - {package: pyjwt, location: "hub/auth.py:14", symbol: get_signing_key_from_jwt}
+  - {package: pyjwt, location: "hub/auth.py:15", symbol: decode}
+  - {package: pyjwt, location: "hub/auth.py:16", symbol: PyJWTError}
+  - {package: lxml, location: "hub/catalog.py:1", symbol: etree}
+  - {package: lxml, location: "hub/catalog.py:6", symbol: iterparse}
+
+expected_dependencies:
+  - {name: fastapi, version: "0.141.1", scope: main, direct: true, match: none}
+  - {name: python-multipart, version: "0.0.30", scope: main, direct: true, match: affected}
+  - {name: pyjwt, version: "2.12.0", scope: main, direct: true, match: affected}
+  - {name: lxml, version: "5.3.0", scope: main, direct: true, match: affected}
+  - {name: starlette, version: "1.2.0", scope: main, direct: false, match: affected}
+  - {name: cryptography, version: "50.0.1", scope: main, direct: false, match: none}
+  - {name: annotated-doc, version: "0.0.5", scope: main, direct: false, match: none}
+  - {name: annotated-types, version: "0.8.0", scope: main, direct: false, match: none}
+  - {name: anyio, version: "4.15.1", scope: main, direct: false, match: none}
+  - {name: cffi, version: "2.1.1", scope: main, direct: false, match: none}
+  - {name: idna, version: "3.20", scope: main, direct: false, match: none}
+  - {name: pycparser, version: "3.0", scope: main, direct: false, match: none}
+  - {name: pydantic, version: "2.13.5", scope: main, direct: false, match: none}
+  - {name: pydantic-core, version: "2.46.5", scope: main, direct: false, match: none}
+  - {name: typing-extensions, version: "4.16.0", scope: main, direct: false, match: none}
+  - {name: typing-inspection, version: "0.4.4", scope: main, direct: false, match: none}
